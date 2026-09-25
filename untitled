@@ -1,0 +1,1 @@
+onst isValidPassword =await user.comparePassword(password) “check whether the password entered by the user matches the hashed password stored in the database.
