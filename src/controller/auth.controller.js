@@ -1,13 +1,23 @@
 const User = require("../models/user.model");
-const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const emailService = require("../services/email.services");
+console.log("EMAIL SERVICE:", emailService);
 
 const registerUser = async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({
+                message: "name, email and password are required"
+            });
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+
         const existingUser = await User.findOne({
-            email: email.trim().toLowerCase()
+            email: normalizedEmail
         });
 
         if (existingUser) {
@@ -18,21 +28,26 @@ const registerUser = async (req, res) => {
 
         const user = await User.create({
             name,
-            email,
+            email: normalizedEmail,
             password
         });
 
         const token = jwt.sign(
-            {
-                userId: user._id
-            },
+            { userId: user._id },
             process.env.JWT_SECRET,
-            {
-                expiresIn: "7d"
-            }
+            { expiresIn: "7d" }
         );
 
-        res.cookie("token", token);
+        res.cookie("token", token, {
+            httpOnly: true
+        });
+
+       
+        console.log("EMAIL BEING SENT TO:", user.email);
+
+        emailService
+            .sendRegistrationEmail(user.email, user.name)
+            .catch((err) => console.error("Email error:", err.message));
 
         return res.status(201).json({
             message: "User registered successfully",
@@ -44,22 +59,30 @@ const registerUser = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Register error:", error);
+
         return res.status(500).json({
             message: "Server error",
             error: error.message
         });
     }
 };
-/**
- * User login controller
- * POST /api/auth/login
- */
 
-async function userLoginController(req, res) {
+
+
+const userLoginController = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const user = await User.findOne({ email }).select("+password");
+        if (!email || !password) {
+            return res.status(400).json({
+                message: "email and password are required"
+            });
+        }
+
+        const user = await User.findOne({
+            email: email.trim().toLowerCase()
+        }).select("+password");
 
         if (!user) {
             return res.status(401).json({
@@ -76,16 +99,14 @@ async function userLoginController(req, res) {
         }
 
         const token = jwt.sign(
-            {
-                userId: user._id
-            },
+            { userId: user._id },
             process.env.JWT_SECRET,
-            {
-                expiresIn: "7d"
-            }
+            { expiresIn: "7d" }
         );
 
-        res.cookie("token", token);
+        res.cookie("token", token, {
+            httpOnly: true
+        });
 
         return res.status(200).json({
             message: "Login successful",
@@ -98,12 +119,14 @@ async function userLoginController(req, res) {
         });
 
     } catch (error) {
+        console.error("Login error:", error);
+
         return res.status(500).json({
             message: "Server error",
             error: error.message
         });
     }
-}
+};
 
 
 module.exports = {
